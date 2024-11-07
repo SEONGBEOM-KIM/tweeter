@@ -1,23 +1,30 @@
-from rest_framework.decorators import api_view
+from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.exceptions import NotFound
+from users.models import User
 from .models import Tweet
 from .serializers import TweetSerializer
 
 
-@api_view(["GET"])
-def tweets(request):
-    if request.method == "GET":
+class Tweets(APIView):
+
+    def get(self, request):
         all_tweets = Tweet.objects.all()
         serializer = TweetSerializer(all_tweets, many=True)
         return Response(serializer.data)
+
         
 
 
-@api_view(["GET"])
-def detail(request, user_id):
-    if request.method == "GET":
-        all_tweets = Tweet.objects.filter(user=user_id)
-        serializer = TweetSerializer(all_tweets, many=True)
+class TweetDetail(APIView):
+
+    def get(self, request, user_id):
+        try:
+          user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+          raise NotFound
+        tweets = Tweet.objects.filter(user=user_id)
+        serializer = TweetSerializer(tweets, many=True)
         return Response(serializer.data)
 
 
