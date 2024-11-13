@@ -1,6 +1,9 @@
+from django.contrib.auth import authenticate, login, logout
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ParseError
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.status import HTTP_200_OK
 from tweets.models import Tweet
 from tweets.serializers import TweetSerializer
 from .models import User
@@ -17,6 +20,21 @@ class Users(APIView):
     )
     return Response(serializer.data)
 
+  def post(self, request):
+    password = request.data.get("password")
+    if not password:
+      raise ParseError
+    serializer = UserSerializer(data=request.data)
+    if serializer.is_valid():
+      user = serializer.save()
+      user.set_password(password)
+      user.save()
+      serializer = UserSerializer(user)
+      return Response(serializer.data)
+    else:
+      return Response(serializer.errors)
+
+
 class UserDetail(APIView):
 
   def get(self, request, pk):
@@ -27,13 +45,63 @@ class UserDetail(APIView):
     serializer = UserSerializer(user)
     return Response(serializer.data)
 
+
 class UserTweet(APIView):
 
   def get(self, request, pk):
-      try:
-        user = User.objects.get(pk=pk)
-      except User.DoesNotExist:
-        raise NotFound
-      tweets = Tweet.objects.filter(user=pk)
-      serializer = TweetSerializer(tweets, many=True,)
-      return Response(serializer.data)
+    try:
+      user = User.objects.get(pk=pk)
+    except User.DoesNotExist:
+      raise NotFound
+    tweets = Tweet.objects.filter(user=pk)
+    serializer = TweetSerializer(
+        tweets,
+        many=True,
+    )
+    return Response(serializer.data)
+
+
+class UserPassword(APIView):
+
+  permission_classes = [IsAuthenticated]
+
+  def put(self, request):
+    user = request.user
+    old_password = request.data.get("old_password")
+    new_password = request.data.get("new_password")
+    if not old_password or not new_password:
+      raise ParseError
+    if user.check_password(old_password):
+      user.set_password(new_password)
+      user.save()
+      return Response(status=HTTP_200_OK)
+    else:
+      raise ParseError
+
+
+class Login(APIView):
+
+  def post(self, request):
+    username = request.data.get("username")
+    password = request.data.get("password")
+    if not username or not password:
+      raise ParseError
+    user = authenticate(
+        request,
+        username=username,
+        password=password,
+    )
+    if user:
+      login(request, user)
+      return Response(status=HTTP_200_OK)
+    else:
+      raise ParseError
+
+
+class Logout(APIView):
+
+  permission_classes = [IsAuthenticated]
+
+  def post(self, request):
+    logout(request)
+    return Response(status=HTTP_200_OK)
